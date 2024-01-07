@@ -147,7 +147,6 @@ class TransferMoneyView(TransactionCreateMixin):
         )
         send_transaction_email(
             self.request.user, amount, 'Transfer Message', 'transactions/transfer_mail.html')
-
         return super().form_valid(form)
 
 

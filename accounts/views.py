@@ -6,6 +6,11 @@ from django.urls import reverse_lazy
 from django.contrib.auth.views import LoginView,LogoutView
 from .forms import UserUpdateForm
 from django.views import View
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import logout, update_session_auth_hash
+from django.contrib import messages
+from django.core.mail import EmailMessage, EmailMultiAlternatives
+from django.template.loader import render_to_string
 # Create your views here.
 
 class UserRegistrationView(FormView):
@@ -45,3 +50,23 @@ class UserBankAccountUpdateView(View):
             return redirect('profile') 
         return render(request, self.template_name, {'form': form})
 
+
+def change_pass(request):
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, data=request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Password changed Successfully')
+            update_session_auth_hash(request, form.user)
+            mail_subject='Deposit Message'
+            message=render_to_string('transactions/deposit_mail.html',{
+                'user':request.user
+            })
+            to_email=request.user.email
+            send_email = EmailMultiAlternatives(mail_subject, '', to=[to_email])
+            send_email.attach_alternative(message,"text/html")
+            send_email.send()
+            return redirect('profile')
+    else:
+        form = PasswordChangeForm(user=request.user)
+    return render(request, 'accounts/change_pass.html', {'form': form})
