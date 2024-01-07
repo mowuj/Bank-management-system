@@ -1,6 +1,6 @@
 from django import forms
 from .models import Transaction
-
+from accounts.models import UserBankAccount
 
 class TransactionForm(forms.ModelForm):
     class Meta:
@@ -69,3 +69,51 @@ class LoanRequestForm(TransactionForm):
         amount = self.cleaned_data.get('amount')
 
         return amount
+
+
+class TransferForm(TransactionForm):
+    receiver_account = forms.ModelChoiceField(
+        queryset=UserBankAccount.objects.all(), label='Receiver Account'
+    )
+
+    class Meta:
+        model = Transaction
+        fields = [
+            'amount',
+            'transaction_type',
+            'receiver_account'
+        ]
+
+    def clean_amount(self):
+        cleaned_data = super().clean()
+        amount = cleaned_data.get('amount')
+        receiver_account = cleaned_data.get('receiver_account')
+        sender_account = self.account
+
+
+        if receiver_account == sender_account:
+            raise forms.ValidationError("Cannot transfer to your own account.")
+
+        if receiver_account and amount:
+            if amount > sender_account.balance:
+                raise forms.ValidationError(
+                    f'You have {sender_account.balance} $ in your account. '
+                    'You cannot transfer more than your account balance.'
+                )
+
+            receiver_account_exists = UserBankAccount.objects.filter(
+                id=receiver_account.id).exists()
+            if not receiver_account_exists:
+                raise forms.ValidationError("Receiver account does not exist.")
+
+        return amount
+
+    def save(self, commit=True):
+        print("Inside save method of TransferForm")
+        sender_account = self.account
+        receiver_account = self.cleaned_data.get('receiver_account')
+        amount = self.cleaned_data.get('amount')
+
+        return super().save(commit)
+
+

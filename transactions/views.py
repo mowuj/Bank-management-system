@@ -6,15 +6,17 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views import View
 from django.http import HttpResponse
 from django.views.generic import CreateView, ListView
-from transactions.constants import DEPOSIT, WITHDRAW, LOAN, LOAN_PAID
+from transactions.constants import DEPOSIT, WITHDRAW, LOAN, LOAN_PAID, TRANSFER
 from datetime import datetime
 from django.db.models import Sum
 from transactions.forms import (
     DepositForm,
     WithdrawForm,
     LoanRequestForm,
+    TransferForm
 )
 from transactions.models import Transaction
+from accounts.models import UserBankAccount
 
 
 class TransactionCreateMixin(LoginRequiredMixin, CreateView):
@@ -50,10 +52,6 @@ class DepositMoneyView(TransactionCreateMixin):
     def form_valid(self, form):
         amount = form.cleaned_data.get('amount')
         account = self.request.user.account
-        # if not account.initial_deposit_date:
-        #     now = timezone.now()
-        #     account.initial_deposit_date = now
-        # amount = 200, tar ager balance = 0 taka new balance = 0+200 = 200
         account.balance += amount
         account.save(
             update_fields=[
@@ -93,6 +91,47 @@ class WithdrawMoneyView(TransactionCreateMixin):
         return super().form_valid(form)
 
 
+class TransferMoneyView(TransactionCreateMixin):
+    form_class = TransferForm
+    title = "Transfer Money"
+    
+    def get_initial(self):
+        initial = {'transaction_type': TRANSFER}
+        return initial
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)        
+        context['receiver_accounts'] = UserBankAccount.objects.exclude(
+            id=self.request.user.account.id)
+        return context
+
+    
+    def form_valid(self,form):
+        sender_account = self.request.user.account
+        receiver_account = form.cleaned_data.get('receiver_account')
+        amount = form.cleaned_data.get('amount')
+        
+        sender_account.balance -= amount
+        receiver_account.balance += amount
+        
+        sender_account.save(
+            update_fields=[
+                'balance'
+            ]
+        )
+        receiver_account.save(
+            update_fields=[
+                'balance'
+            ]
+        )
+        messages.success(
+            self.request,
+            f'Successfully Transfer {"{:,.2f}".format(float(amount))}$ to {receiver_account} account'
+        )
+
+        return super().form_valid(form)
+
+
 class LoanRequestView(TransactionCreateMixin):
     form_class = LoanRequestForm
     title = 'Request For Loan'
@@ -100,7 +139,8 @@ class LoanRequestView(TransactionCreateMixin):
     def get_initial(self):
         initial = {'transaction_type': LOAN}
         return initial
-
+    
+    
     def form_valid(self, form):
         amount = form.cleaned_data.get('amount')
         current_loan_count = Transaction.objects.filter(
@@ -166,7 +206,7 @@ class PayLoanView(LoginRequiredMixin, View):
                 loan.loan_approved = True
                 loan.transaction_type = LOAN_PAID
                 loan.save()
-                return redirect('transactions:loan_list')
+                return redirect('loan_list')
             else:
                 messages.error(
                     self.request,
@@ -187,3 +227,4 @@ class LoanListView(LoginRequiredMixin, ListView):
             account=user_account, transaction_type=3)
         print(queryset)
         return queryset
+
