@@ -94,18 +94,13 @@ class TransferForm(TransactionForm):
         if receiver_account == sender_account:
             raise forms.ValidationError("Cannot transfer to your own account.")
 
-        if receiver_account and amount:
-            if amount > sender_account.balance:
-                raise forms.ValidationError(
-                    f'You have {sender_account.balance} $ in your account. '
-                    'You cannot transfer more than your account balance.'
-                )
-
-            receiver_account_exists = UserBankAccount.objects.filter(
-                id=receiver_account.id).exists()
-            if not receiver_account_exists:
-                raise forms.ValidationError("Receiver account does not exist.")
-
+        
+        if amount > sender_account.balance:
+            raise forms.ValidationError(
+                f'You have {sender_account.balance} $ in your account. '
+                'You cannot transfer more than your account balance.'
+            )
+            
         return amount
 
     def save(self, commit=True):
